@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            Int               @id @default(autoincrement())
+  email         String            @unique @db.VarChar(255)
+  passwordHash  String            @map("password_hash")
+  role          Role              @default(TRAINEE)
+  aiCredits     Int               @default(2) @map("ai_credits")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+  refreshTokens RefreshToken[]
+  sessions      TrainingSession[]
+  transactions  Transaction[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  userId    Int      @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("refresh_tokens")
+}
+
+enum Role {
+  TRAINEE
+  TRAINER
+  ADMIN
+}
+
+model Transaction {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  user      User     @relation(fields: [userId], references: [id])
+  amount    Int
+  credits   Int
+  status    String   @default("pending") @db.VarChar(50)
+  payosRef  String?  @map("payos_ref") @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("transactions")
+}
+
+model TrainingSession {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  user       User     @relation(fields: [userId], references: [id])
+  exerciseId Int?     @map("exercise_id")
+  status     String   @default("pending") @db.VarChar(50)
+  jobId      String?  @map("job_id") @db.VarChar(255)
+  score      Float?
+  payload    Json?
+  result     Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("training_sessions")
+}
+
+// Requires pgvector extension: CREATE EXTENSION IF NOT EXISTS vector;
+model Exercise {
+  id          Int                      @id @default(autoincrement())
+  name        String                   @db.VarChar(255)
+  description String?
+  category    String?                  @db.VarChar(100)
+  embedding   Unsupported("vector(1536)")?
+  createdAt   DateTime                 @default(now()) @map("created_at")
+
+  @@map("exercises")
+}
