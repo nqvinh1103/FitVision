@@ -32,6 +32,12 @@ enum Difficulty {
   ADVANCED
 }
 
+enum ProgramStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
 // ─── Auth & Identity ─────────────────────────────────────────────────────────
 
 model User {
@@ -50,6 +56,8 @@ model User {
   sessions      TrainingSession[]
   transactions  Transaction[]
   exercises     Exercise[]
+  programs      TrainingProgram[]
+  userPrograms  UserProgram[]
 
   @@map("users")
 }
@@ -86,22 +94,25 @@ model Transaction {
 // ─── AI Form Check ───────────────────────────────────────────────────────────
 
 model TrainingSession {
-  id           Int       @id @default(autoincrement())
-  userId       Int       @map("user_id")
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  exerciseId   Int?      @map("exercise_id")
-  exercise     Exercise? @relation(fields: [exerciseId], references: [id], onDelete: SetNull)
-  status       String    @default("pending") @db.VarChar(50)
-  jobId        String?   @map("job_id") @db.VarChar(255)
+  id           Int              @id @default(autoincrement())
+  userId       Int              @map("user_id")
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exerciseId   Int?             @map("exercise_id")
+  exercise     Exercise?        @relation(fields: [exerciseId], references: [id], onDelete: SetNull)
+  programId    Int?             @map("program_id")
+  program      TrainingProgram? @relation(fields: [programId], references: [id], onDelete: SetNull)
+  status       String           @default("pending") @db.VarChar(50)
+  jobId        String?          @map("job_id") @db.VarChar(255)
   score        Float?
   payload      Json?
   result       Json?
-  trainerNotes String?   @map("trainer_notes")
-  createdAt    DateTime  @default(now()) @map("created_at")
+  trainerNotes String?          @map("trainer_notes")
+  createdAt    DateTime         @default(now()) @map("created_at")
 
   @@index([userId])
   @@index([score])
   @@index([status])
+  @@index([programId])
   @@map("training_sessions")
 }
 
@@ -119,9 +130,69 @@ model Exercise {
   embedding       Unsupported("vector(1536)")?
   createdAt       DateTime    @default(now()) @map("created_at")
 
-  sessions TrainingSession[]
+  sessions         TrainingSession[]
+  programExercises ProgramExercise[]
 
   @@index([category])
   @@index([creatorId])
   @@map("exercises")
+}
+
+// ─── Marketplace & RAG ───────────────────────────────────────────────────────
+
+model TrainingProgram {
+  id             Int           @id @default(autoincrement())
+  trainerId      Int           @map("trainer_id")
+  trainer        User          @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  title          String        @db.VarChar(255)
+  description    String?
+  thumbnailUrl   String?       @map("thumbnail_url")
+  price          Int           @default(0)
+  durationWeeks  Int?          @map("duration_weeks")
+  isAiGenerated  Boolean       @default(false) @map("is_ai_generated")
+  status         ProgramStatus @default(DRAFT)
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  programExercises ProgramExercise[]
+  userPrograms     UserProgram[]
+  sessions         TrainingSession[]
+
+  @@index([trainerId])
+  @@index([status])
+  @@map("training_programs")
+}
+
+model ProgramExercise {
+  id              Int             @id @default(autoincrement())
+  programId       Int             @map("program_id")
+  program         TrainingProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  exerciseId      Int             @map("exercise_id")
+  exercise        Exercise        @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  dayNumber       Int             @map("day_number")
+  orderInDay      Int             @map("order_in_day")
+  sets            Int?
+  reps            Int?
+  durationSeconds Int?            @map("duration_seconds")
+  notes           String?
+
+  @@unique([programId, dayNumber, orderInDay])
+  @@index([programId])
+  @@index([exerciseId])
+  @@map("program_exercises")
+}
+
+model UserProgram {
+  id          Int             @id @default(autoincrement())
+  userId      Int             @map("user_id")
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  programId   Int             @map("program_id")
+  program     TrainingProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  amountPaid  Int             @map("amount_paid")
+  purchasedAt DateTime        @default(now()) @map("purchased_at")
+
+  @@unique([userId, programId])
+  @@index([userId])
+  @@index([programId])
+  @@map("user_programs")
 }
