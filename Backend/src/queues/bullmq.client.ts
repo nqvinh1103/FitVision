@@ -8,7 +8,6 @@ export const redisConnection = new IORedis(env.REDIS_URL, {
   enableReadyCheck: false,
 });
 
-// @ts-ignore - version mismatch between ioredis and bullmq's bundled version
-export const cvQueue = new Queue('cv-jobs', { connection: redisConnection });
-// @ts-ignore - version mismatch between ioredis and bullmq's bundled version
-export const nlpQueue = new Queue('nlp-jobs', { connection: redisConnection });
+// Cast needed: BullMQ v5 types expect its internal ConnectionOptions, not raw IORedis
+export const cvQueue = new Queue('cv-jobs', { connection: redisConnection as any });
+export const nlpQueue = new Queue('nlp-jobs', { connection: redisConnection as any });
