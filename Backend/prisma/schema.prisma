@@ -38,6 +38,12 @@ enum ProgramStatus {
   ARCHIVED
 }
 
+enum ChallengeStatus {
+  PENDING
+  PASSED
+  FAILED
+}
+
 // ─── Auth & Identity ─────────────────────────────────────────────────────────
 
 model User {
@@ -52,12 +58,13 @@ model User {
   createdAt       DateTime         @default(now()) @map("created_at")
   updatedAt       DateTime         @updatedAt @map("updated_at")
 
-  refreshTokens RefreshToken[]
-  sessions      TrainingSession[]
-  transactions  Transaction[]
-  exercises     Exercise[]
-  programs      TrainingProgram[]
-  userPrograms  UserProgram[]
+  refreshTokens     RefreshToken[]
+  sessions          TrainingSession[]
+  transactions      Transaction[]
+  exercises         Exercise[]
+  programs          TrainingProgram[]
+  userPrograms      UserProgram[]
+  challengeSessions ChallengeSession[]
 
   @@map("users")
 }
@@ -109,6 +116,8 @@ model TrainingSession {
   trainerNotes String?          @map("trainer_notes")
   createdAt    DateTime         @default(now()) @map("created_at")
 
+  challengeSessions ChallengeSession[]
+
   @@index([userId])
   @@index([score])
   @@index([status])
@@ -132,6 +141,7 @@ model Exercise {
 
   sessions         TrainingSession[]
   programExercises ProgramExercise[]
+  challenges       Challenge[]
 
   @@index([category])
   @@index([creatorId])
@@ -195,4 +205,46 @@ model UserProgram {
   @@index([userId])
   @@index([programId])
   @@map("user_programs")
+}
+
+// ─── Gamification ────────────────────────────────────────────────────────────
+
+model Challenge {
+  id             Int       @id @default(autoincrement())
+  title          String    @db.VarChar(255)
+  description    String?
+  exerciseId     Int       @map("exercise_id")
+  exercise       Exercise  @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  targetReps     Int?      @map("target_reps")
+  targetScore    Float?    @map("target_score")
+  rewardCredits  Int       @map("reward_credits")
+  startAt        DateTime  @map("start_at")
+  endAt          DateTime  @map("end_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  sessions ChallengeSession[]
+
+  @@index([exerciseId])
+  @@index([startAt, endAt])
+  @@map("challenges")
+}
+
+model ChallengeSession {
+  id                Int              @id @default(autoincrement())
+  userId            Int              @map("user_id")
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challengeId       Int              @map("challenge_id")
+  challenge         Challenge        @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  trainingSessionId Int?             @map("training_session_id")
+  trainingSession   TrainingSession? @relation(fields: [trainingSessionId], references: [id], onDelete: SetNull)
+  achievedReps      Int?             @map("achieved_reps")
+  achievedScore     Float?           @map("achieved_score")
+  status            ChallengeStatus  @default(PENDING)
+  completedAt       DateTime?        @map("completed_at")
+  createdAt         DateTime         @default(now()) @map("created_at")
+
+  @@unique([userId, challengeId])
+  @@index([userId])
+  @@index([challengeId])
+  @@map("challenge_sessions")
 }
