@@ -3,7 +3,7 @@ import { Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { authMiddleware, AuthRequest } from '../middlewares/auth.middleware';
 
-const TEST_SECRET = 'test-secret-key-that-is-at-least-32-characters-long';
+const TEST_SECRET = process.env.JWT_SECRET!;
 
 const mockRes = () => {
   const res = {

@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { env } from '../config/env';
 
 export const errorMiddleware = (
   err: Error,
@@ -7,5 +8,6 @@ export const errorMiddleware = (
   _next: NextFunction,
 ): void => {
   console.error(err.stack);
-  res.status(500).json({ error: err.message || 'Internal server error' });
+  const message = env.NODE_ENV === 'production' ? 'Internal server error' : err.message;
+  res.status(500).json({ error: message });
 };
