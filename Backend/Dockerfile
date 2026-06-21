@@ -9,7 +9,7 @@ RUN npx prisma generate
 COPY tsconfig.json ./
 COPY src ./src
 EXPOSE 3000
-CMD ["npx", "tsx", "src/index.ts"]
+CMD ["npx", "tsx", "watch", "src/index.ts"]
 
 FROM base AS builder
 COPY prisma ./prisma
