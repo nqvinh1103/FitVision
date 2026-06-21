@@ -34,6 +34,8 @@ async def run_cv_worker() -> None:
         connection["password"] = parsed.password
     if parsed.username:
         connection["username"] = parsed.username
+    if parsed.scheme == "rediss":
+        connection["tls"] = {}
 
     worker = Worker("cv-jobs", process_cv_job, {"connection": connection})
     print("[CV Worker] Started — listening for cv-jobs")
