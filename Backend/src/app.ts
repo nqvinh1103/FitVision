@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser';
 import { env } from './config/env';
 import { healthRouter } from './routes/health.routes';
 import { authRouter } from './routes/auth.routes';
+import { programRouter } from './routes/program.routes';
 import { errorMiddleware } from './middlewares/error.middleware';
 
 export const createApp = () => {
@@ -19,6 +20,7 @@ export const createApp = () => {
 
   app.use('/health', healthRouter);
   app.use('/auth', authRouter);
+  app.use('/programs', programRouter);
 
   app.use(errorMiddleware);
 
