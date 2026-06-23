@@ -1,3 +1,6 @@
+-- Enable pgvector for embedding column on exercises table
+CREATE EXTENSION IF NOT EXISTS vector;
+
 -- CreateEnum
 CREATE TYPE "Role" AS ENUM ('TRAINEE', 'TRAINER', 'ADMIN');
 
