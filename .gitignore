@@ -1,0 +1,26 @@
+# Superpowers
+.superpowers/
+
+# Node.js
+node_modules/
+dist/
+build/
+*.log
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Environment
+.env
+.env.local
+.env.production
+!.env.test
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
