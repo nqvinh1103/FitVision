@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router-dom"
 import {
   DumbbellIcon,
   HomeIcon,
+  KeyRoundIcon,
   LayoutDashboardIcon,
   LogOutIcon,
   MenuIcon,
@@ -126,10 +127,16 @@ export function Sidebar() {
 
         <Separator />
 
-        <div className="p-3">
+        <div className="space-y-1 p-3">
           <div className="mb-2 truncate px-3 text-xs text-muted-foreground">
             {user.name} · {user.role}
           </div>
+          <Button variant="ghost" className="w-full justify-start gap-3" asChild>
+            <Link to="/settings/change-password">
+              <KeyRoundIcon className="size-4" />
+              Change password
+            </Link>
+          </Button>
           <Button
             variant="ghost"
             className="w-full justify-start gap-3"

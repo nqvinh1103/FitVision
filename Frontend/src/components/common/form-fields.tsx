@@ -4,7 +4,7 @@ import {
   type FieldPath,
   type FieldValues,
 } from "react-hook-form"
-import type { HTMLInputTypeAttribute } from "react"
+import type { HTMLAttributes, HTMLInputTypeAttribute } from "react"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -29,6 +29,8 @@ interface FormTextFieldProps<T extends FieldValues> {
   type?: HTMLInputTypeAttribute
   placeholder?: string
   autoComplete?: string
+  inputMode?: HTMLAttributes<HTMLInputElement>["inputMode"]
+  maxLength?: number
   variant?: "default" | "underline"
 }
 
@@ -39,6 +41,8 @@ export function FormTextField<T extends FieldValues>({
   type = "text",
   placeholder,
   autoComplete,
+  inputMode,
+  maxLength,
   variant = "default",
 }: FormTextFieldProps<T>) {
   const isUnderline = variant === "underline"
@@ -65,6 +69,8 @@ export function FormTextField<T extends FieldValues>({
               type={type}
               placeholder={placeholder}
               autoComplete={autoComplete}
+              inputMode={inputMode}
+              maxLength={maxLength}
               aria-invalid={!!fieldState.error}
               className={
                 isUnderline
