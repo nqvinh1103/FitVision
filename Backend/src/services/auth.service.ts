@@ -1,12 +1,13 @@
 import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt, { SignOptions } from 'jsonwebtoken';
-import { Prisma, User } from '@prisma/client';
+import { Prisma, Role, User } from '@prisma/client';
 import { env } from '../config/env';
 import { prisma } from '../lib/prisma';
 import {
   ChangePasswordInput,
   LoginInput,
+  normalizeRegisterRole,
   RegisterInput,
   UpdateProfileInput,
   VerifyForgotPasswordInput,
@@ -31,6 +32,20 @@ import * as emailService from './email.service';
 
 const BCRYPT_ROUNDS = 12;
 const REGISTER_TOO_MANY_ATTEMPTS = 'Too many failed attempts. Please register again';
+
+const toPrismaRole = (role: NonNullable<ReturnType<typeof normalizeRegisterRole>>): Role =>
+  role === 'TRAINER' ? Role.TRAINER : Role.TRAINEE;
+
+const resolveRegistrationRole = (...candidates: unknown[]): Role => {
+  for (const candidate of candidates) {
+    const normalized = normalizeRegisterRole(candidate);
+    if (normalized) {
+      return toPrismaRole(normalized);
+    }
+  }
+
+  return Role.TRAINEE;
+};
 
 const forgotPasswordResponse = (): RegisterOtpResponse => ({
   message: 'If the email exists, an OTP has been sent',
@@ -94,6 +109,7 @@ const assertResendCooldown = (lastSentAt: Date): void => {
 const createAndSendOtp = async (
   email: string,
   passwordHash: string,
+  role: Role,
   name: string | undefined,
 ): Promise<RegisterOtpResponse> => {
   const otp = generateOtp();
@@ -107,6 +123,7 @@ const createAndSendOtp = async (
       email,
       otpHash,
       passwordHash,
+      role,
       name,
       expiresAt,
       lastSentAt: now,
@@ -114,6 +131,7 @@ const createAndSendOtp = async (
     update: {
       otpHash,
       passwordHash,
+      role,
       name,
       attempts: 0,
       expiresAt,
@@ -139,8 +157,9 @@ export const requestRegister = async (input: RegisterInput): Promise<RegisterOtp
   }
 
   const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
+  const role = resolveRegistrationRole(input.role);
 
-  return createAndSendOtp(input.email, passwordHash, input.name);
+  return createAndSendOtp(input.email, passwordHash, role, input.name);
 };
 
 export const verifyRegister = async (
@@ -148,6 +167,16 @@ export const verifyRegister = async (
 ): Promise<AuthResponse & { refreshToken: string }> => {
   const pending = await prisma.registrationOtp.findUnique({
     where: { email: input.email },
+    select: {
+      id: true,
+      email: true,
+      otpHash: true,
+      passwordHash: true,
+      name: true,
+      role: true,
+      attempts: true,
+      expiresAt: true,
+    },
   });
 
   if (!pending) {
@@ -177,10 +206,13 @@ export const verifyRegister = async (
     throw new AppError(409, 'Email already exists');
   }
 
+  const role = resolveRegistrationRole(input.role, pending.role);
+
   const user = await prisma.user.create({
     data: {
       email: pending.email,
       passwordHash: pending.passwordHash,
+      role,
       name: pending.name,
     },
   });
