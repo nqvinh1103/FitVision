@@ -1,27 +1,42 @@
-import { randomBytes, randomInt } from 'crypto';
+import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { Prisma, User } from '@prisma/client';
 import { env } from '../config/env';
 import { prisma } from '../lib/prisma';
 import {
+  ChangePasswordInput,
   LoginInput,
   RegisterInput,
   UpdateProfileInput,
+  VerifyForgotPasswordInput,
   VerifyRegisterInput,
 } from '../schemas/auth.schema';
 import {
   AuthResponse,
+  MessageResponse,
   PublicUser,
   RefreshResponse,
   RegisterOtpResponse,
 } from '../types/auth.types';
 import { AppError } from '../utils/app-error';
-import { parseDurationToDate, parseDurationToMs } from '../utils/duration';
+import { parseDurationToDate } from '../utils/duration';
+import {
+  generateOtp,
+  getOtpExpiresInSeconds,
+  hashOtp,
+  validateOtpOrThrow,
+} from '../utils/otp';
 import * as emailService from './email.service';
 
 const BCRYPT_ROUNDS = 12;
-const MAX_OTP_ATTEMPTS = 5;
+const REGISTER_TOO_MANY_ATTEMPTS = 'Too many failed attempts. Please register again';
+
+const forgotPasswordResponse = (): RegisterOtpResponse => ({
+  message: 'If the email exists, an OTP has been sent',
+  expiresIn: getOtpExpiresInSeconds(),
+});
+
 export const toPublicUser = (user: User): PublicUser => ({
   id: user.id,
   email: user.email,
@@ -51,6 +66,10 @@ const createRefreshToken = async (userId: number): Promise<string> => {
   return token;
 };
 
+const revokeAllRefreshTokens = async (userId: number): Promise<void> => {
+  await prisma.refreshToken.deleteMany({ where: { userId } });
+};
+
 const issueTokens = async (user: User): Promise<AuthResponse & { refreshToken: string }> => {
   const accessToken = signAccessToken(user);
   const refreshToken = await createRefreshToken(user.id);
@@ -62,12 +81,15 @@ const issueTokens = async (user: User): Promise<AuthResponse & { refreshToken: s
   };
 };
 
-const generateOtp = (): string => randomInt(100000, 999999).toString();
+const assertResendCooldown = (lastSentAt: Date): void => {
+  const cooldownMs = env.OTP_RESEND_COOLDOWN_SECONDS * 1000;
+  const elapsed = Date.now() - lastSentAt.getTime();
 
-const hashOtp = (otp: string): Promise<string> => bcrypt.hash(otp, BCRYPT_ROUNDS);
-
-const getOtpExpiresInSeconds = (): number =>
-  Math.floor(parseDurationToMs(env.OTP_EXPIRES_IN) / 1000);
+  if (elapsed < cooldownMs) {
+    const retryAfter = Math.ceil((cooldownMs - elapsed) / 1000);
+    throw new AppError(429, `Please wait ${retryAfter} seconds before resending OTP`);
+  }
+};
 
 const createAndSendOtp = async (
   email: string,
@@ -132,33 +154,19 @@ export const verifyRegister = async (
     throw new AppError(404, 'No pending registration found');
   }
 
-  if (pending.expiresAt < new Date()) {
-    await prisma.registrationOtp.delete({ where: { id: pending.id } });
-    throw new AppError(410, 'OTP has expired');
-  }
-
-  if (pending.attempts >= MAX_OTP_ATTEMPTS) {
-    await prisma.registrationOtp.delete({ where: { id: pending.id } });
-    throw new AppError(429, 'Too many failed attempts. Please register again');
-  }
-
-  const isOtpValid = await bcrypt.compare(input.otp, pending.otpHash);
-
-  if (!isOtpValid) {
-    const newAttempts = pending.attempts + 1;
-
-    if (newAttempts >= MAX_OTP_ATTEMPTS) {
-      await prisma.registrationOtp.delete({ where: { id: pending.id } });
-      throw new AppError(429, 'Too many failed attempts. Please register again');
-    }
-
-    await prisma.registrationOtp.update({
-      where: { id: pending.id },
-      data: { attempts: newAttempts },
-    });
-
-    throw new AppError(401, 'Invalid OTP');
-  }
+  await validateOtpOrThrow(
+    pending,
+    input.otp,
+    {
+      delete: async (id) => {
+        await prisma.registrationOtp.delete({ where: { id } });
+      },
+      incrementAttempts: async (id, attempts) => {
+        await prisma.registrationOtp.update({ where: { id }, data: { attempts } });
+      },
+    },
+    REGISTER_TOO_MANY_ATTEMPTS,
+  );
 
   const existingUser = await prisma.user.findUnique({
     where: { email: input.email },
@@ -191,13 +199,7 @@ export const resendRegisterOtp = async (email: string): Promise<RegisterOtpRespo
     throw new AppError(404, 'No pending registration found');
   }
 
-  const cooldownMs = env.OTP_RESEND_COOLDOWN_SECONDS * 1000;
-  const elapsed = Date.now() - pending.lastSentAt.getTime();
-
-  if (elapsed < cooldownMs) {
-    const retryAfter = Math.ceil((cooldownMs - elapsed) / 1000);
-    throw new AppError(429, `Please wait ${retryAfter} seconds before resending OTP`);
-  }
+  assertResendCooldown(pending.lastSentAt);
 
   const otp = generateOtp();
   const otpHash = await hashOtp(otp);
@@ -222,7 +224,8 @@ export const resendRegisterOtp = async (email: string): Promise<RegisterOtpRespo
   };
 };
 
-export const login = async (input: LoginInput): Promise<AuthResponse & { refreshToken: string }> => {  const user = await prisma.user.findUnique({
+export const login = async (input: LoginInput): Promise<AuthResponse & { refreshToken: string }> => {
+  const user = await prisma.user.findUnique({
     where: { email: input.email },
   });
 
@@ -299,4 +302,150 @@ export const updateProfile = async (
     }
     throw err;
   }
+};
+
+export const changePassword = async (
+  userId: number,
+  input: ChangePasswordInput,
+): Promise<MessageResponse> => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+
+  if (!user) {
+    throw new AppError(404, 'User not found');
+  }
+
+  const isCurrentPasswordValid = await bcrypt.compare(input.currentPassword, user.passwordHash);
+
+  if (!isCurrentPasswordValid) {
+    throw new AppError(401, 'Current password is incorrect');
+  }
+
+  const passwordHash = await bcrypt.hash(input.newPassword, BCRYPT_ROUNDS);
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash },
+  });
+
+  await revokeAllRefreshTokens(userId);
+
+  return { message: 'Password changed successfully' };
+};
+
+export const requestForgotPassword = async (email: string): Promise<RegisterOtpResponse> => {
+  const user = await prisma.user.findUnique({
+    where: { email },
+  });
+
+  if (!user) {
+    return forgotPasswordResponse();
+  }
+
+  const otp = generateOtp();
+  const otpHash = await hashOtp(otp);
+  const expiresAt = parseDurationToDate(env.OTP_EXPIRES_IN);
+  const now = new Date();
+
+  await prisma.passwordResetOtp.upsert({
+    where: { email },
+    create: {
+      email,
+      otpHash,
+      expiresAt,
+      lastSentAt: now,
+    },
+    update: {
+      otpHash,
+      attempts: 0,
+      expiresAt,
+      lastSentAt: now,
+    },
+  });
+
+  await emailService.sendPasswordResetOtpEmail(email, otp);
+
+  return forgotPasswordResponse();
+};
+
+export const verifyForgotPassword = async (
+  input: VerifyForgotPasswordInput,
+): Promise<MessageResponse> => {
+  const pending = await prisma.passwordResetOtp.findUnique({
+    where: { email: input.email },
+  });
+
+  if (!pending) {
+    throw new AppError(404, 'No pending password reset found');
+  }
+
+  await validateOtpOrThrow(pending, input.otp, {
+    delete: async (id) => {
+      await prisma.passwordResetOtp.delete({ where: { id } });
+    },
+    incrementAttempts: async (id, attempts) => {
+      await prisma.passwordResetOtp.update({ where: { id }, data: { attempts } });
+    },
+  });
+
+  const user = await prisma.user.findUnique({
+    where: { email: input.email },
+  });
+
+  if (!user) {
+    await prisma.passwordResetOtp.delete({ where: { id: pending.id } });
+    throw new AppError(404, 'User not found');
+  }
+
+  const passwordHash = await bcrypt.hash(input.newPassword, BCRYPT_ROUNDS);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash },
+  });
+
+  await prisma.passwordResetOtp.delete({ where: { id: pending.id } });
+  await revokeAllRefreshTokens(user.id);
+
+  return { message: 'Password reset successfully' };
+};
+
+export const resendForgotPasswordOtp = async (email: string): Promise<RegisterOtpResponse> => {
+  const user = await prisma.user.findUnique({
+    where: { email },
+  });
+
+  if (!user) {
+    return forgotPasswordResponse();
+  }
+
+  const pending = await prisma.passwordResetOtp.findUnique({
+    where: { email },
+  });
+
+  if (!pending) {
+    throw new AppError(404, 'No pending password reset found');
+  }
+
+  assertResendCooldown(pending.lastSentAt);
+
+  const otp = generateOtp();
+  const otpHash = await hashOtp(otp);
+  const expiresAt = parseDurationToDate(env.OTP_EXPIRES_IN);
+  const now = new Date();
+
+  await prisma.passwordResetOtp.update({
+    where: { id: pending.id },
+    data: {
+      otpHash,
+      attempts: 0,
+      expiresAt,
+      lastSentAt: now,
+    },
+  });
+
+  await emailService.sendPasswordResetOtpEmail(email, otp);
+
+  return forgotPasswordResponse();
 };

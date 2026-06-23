@@ -23,3 +23,7 @@ export interface RegisterOtpResponse {
   message: string;
   expiresIn: number;
 }
+
+export interface MessageResponse {
+  message: string;
+}

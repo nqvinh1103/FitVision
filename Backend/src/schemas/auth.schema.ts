@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const passwordSchema = z
+export const passwordSchema = z
   .string()
   .min(8, 'Password must be at least 8 characters')
   .regex(/[a-zA-Z]/, 'Password must contain at least one letter')
@@ -43,3 +43,27 @@ export const resendOtpSchema = z.object({
 
 export type VerifyRegisterInput = z.infer<typeof verifyRegisterSchema>;
 export type ResendOtpInput = z.infer<typeof resendOtpSchema>;
+
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Current password is required'),
+    newPassword: passwordSchema,
+  })
+  .refine((data) => data.currentPassword !== data.newPassword, {
+    message: 'New password must be different from current password',
+    path: ['newPassword'],
+  });
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().email('Invalid email address'),
+});
+
+export const verifyForgotPasswordSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  otp: z.string().length(6).regex(/^\d{6}$/, 'OTP must be 6 digits'),
+  newPassword: passwordSchema,
+});
+
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+export type VerifyForgotPasswordInput = z.infer<typeof verifyForgotPasswordSchema>;

@@ -1,7 +1,14 @@
 import { Response, NextFunction } from 'express';
 import * as authService from '../services/auth.service';
 import { AuthRequest } from '../middlewares/auth.middleware';
-import { LoginInput, RegisterInput, UpdateProfileInput, VerifyRegisterInput } from '../schemas/auth.schema';
+import {
+  ChangePasswordInput,
+  LoginInput,
+  RegisterInput,
+  UpdateProfileInput,
+  VerifyForgotPasswordInput,
+  VerifyRegisterInput,
+} from '../schemas/auth.schema';
 import {
   clearRefreshTokenCookie,
   REFRESH_TOKEN_COOKIE,
@@ -126,6 +133,60 @@ export const updateMe = async (
   try {
     const user = await authService.updateProfile(req.userId!, req.body as UpdateProfileInput);
     res.status(200).json(user);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const changePassword = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const result = await authService.changePassword(req.userId!, req.body as ChangePasswordInput);
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const forgotPassword = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const { email } = req.body as { email: string };
+    const result = await authService.requestForgotPassword(email);
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const verifyForgotPassword = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const result = await authService.verifyForgotPassword(req.body as VerifyForgotPasswordInput);
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const resendForgotPasswordOtp = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const { email } = req.body as { email: string };
+    const result = await authService.resendForgotPasswordOtp(email);
+    res.status(200).json(result);
   } catch (err) {
     next(err);
   }

@@ -94,6 +94,18 @@ model RegistrationOtp {
   @@map("registration_otps")
 }
 
+model PasswordResetOtp {
+  id         Int      @id @default(autoincrement())
+  email      String   @unique @db.VarChar(255)
+  otpHash    String   @map("otp_hash")
+  attempts   Int      @default(0)
+  expiresAt  DateTime @map("expires_at")
+  lastSentAt DateTime @default(now()) @map("last_sent_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("password_reset_otps")
+}
+
 // ─── Payments ────────────────────────────────────────────────────────────────
 
 model Transaction {

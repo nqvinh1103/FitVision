@@ -144,6 +144,135 @@ describe('Auth routes', () => {
     });
   });
 
+  describe('POST /auth/change-password', () => {
+    it('returns 401 when Authorization header is missing', async () => {
+      const app = createApp();
+      const res = await request(app).post('/auth/change-password').send({
+        currentPassword: 'OldPass1',
+        newPassword: 'NewPass2',
+      });
+
+      expect(res.status).toBe(401);
+    });
+
+    it('returns 401 when current password is incorrect', async () => {
+      const { AppError } = await import('../utils/app-error');
+      vi.mocked(authService.changePassword).mockRejectedValue(
+        new AppError(401, 'Current password is incorrect'),
+      );
+
+      const token = jwt.sign({ userId: 1, role: 'TRAINEE' }, TEST_SECRET, { expiresIn: '1h' });
+      const app = createApp();
+      const res = await request(app)
+        .post('/auth/change-password')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          currentPassword: 'WrongPass1',
+          newPassword: 'NewPass2',
+        });
+
+      expect(res.status).toBe(401);
+      expect(res.body).toEqual({ error: 'Current password is incorrect' });
+    });
+
+    it('returns 200 when password is changed successfully', async () => {
+      vi.mocked(authService.changePassword).mockResolvedValue({
+        message: 'Password changed successfully',
+      });
+
+      const token = jwt.sign({ userId: 1, role: 'TRAINEE' }, TEST_SECRET, { expiresIn: '1h' });
+      const app = createApp();
+      const res = await request(app)
+        .post('/auth/change-password')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          currentPassword: 'OldPass1',
+          newPassword: 'NewPass2',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ message: 'Password changed successfully' });
+      expect(authService.changePassword).toHaveBeenCalledWith(1, {
+        currentPassword: 'OldPass1',
+        newPassword: 'NewPass2',
+      });
+    });
+  });
+
+  describe('POST /auth/forgot-password', () => {
+    it('returns 200 with generic message', async () => {
+      vi.mocked(authService.requestForgotPassword).mockResolvedValue({
+        message: 'If the email exists, an OTP has been sent',
+        expiresIn: 300,
+      });
+
+      const app = createApp();
+      const res = await request(app).post('/auth/forgot-password').send({
+        email: 'user@example.com',
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        message: 'If the email exists, an OTP has been sent',
+        expiresIn: 300,
+      });
+    });
+  });
+
+  describe('POST /auth/forgot-password/verify', () => {
+    it('returns 200 when password is reset successfully', async () => {
+      vi.mocked(authService.verifyForgotPassword).mockResolvedValue({
+        message: 'Password reset successfully',
+      });
+
+      const app = createApp();
+      const res = await request(app).post('/auth/forgot-password/verify').send({
+        email: 'user@example.com',
+        otp: '123456',
+        newPassword: 'NewPass1',
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ message: 'Password reset successfully' });
+    });
+
+    it('returns 401 for invalid OTP', async () => {
+      const { AppError } = await import('../utils/app-error');
+      vi.mocked(authService.verifyForgotPassword).mockRejectedValue(new AppError(401, 'Invalid OTP'));
+
+      const app = createApp();
+      const res = await request(app).post('/auth/forgot-password/verify').send({
+        email: 'user@example.com',
+        otp: '000000',
+        newPassword: 'NewPass1',
+      });
+
+      expect(res.status).toBe(401);
+      expect(res.body).toEqual({ error: 'Invalid OTP' });
+    });
+  });
+
+  describe('POST /auth/forgot-password/resend-otp', () => {
+    it('returns 200 when OTP is resent', async () => {
+      vi.mocked(authService.resendForgotPasswordOtp).mockResolvedValue({
+        message: 'If the email exists, an OTP has been sent',
+        expiresIn: 300,
+      });
+
+      const app = createApp();
+      const res = await request(app).post('/auth/forgot-password/resend-otp').send({
+        email: 'user@example.com',
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        message: 'If the email exists, an OTP has been sent',
+        expiresIn: 300,
+      });
+      expect(authService.resendForgotPasswordOtp).toHaveBeenCalledWith('user@example.com');
+    });
+  });
+
   describe('POST /auth/login', () => {
     it('returns 200 with accessToken on success', async () => {
       vi.mocked(authService.login).mockResolvedValue({

@@ -30,3 +30,23 @@ export const sendOtpEmail = async (to: string, otp: string): Promise<void> => {
     `,
   });
 };
+
+export const sendPasswordResetOtpEmail = async (to: string, otp: string): Promise<void> => {
+  if (env.NODE_ENV === 'test') {
+    return;
+  }
+
+  const expiresMinutes = env.OTP_EXPIRES_IN.replace('m', '');
+
+  await transporter.sendMail({
+    from: `"FitVision" <${env.EMAIL_USER}>`,
+    to,
+    subject: 'FitVision - Mã đặt lại mật khẩu',
+    text: `Mã OTP đặt lại mật khẩu của bạn là: ${otp}\n\nMã có hiệu lực trong ${expiresMinutes} phút. Không chia sẻ mã này với bất kỳ ai.`,
+    html: `
+      <p>Mã OTP đặt lại mật khẩu của bạn là: <strong>${otp}</strong></p>
+      <p>Mã có hiệu lực trong <strong>${expiresMinutes} phút</strong>.</p>
+      <p>Không chia sẻ mã này với bất kỳ ai.</p>
+    `,
+  });
+};
