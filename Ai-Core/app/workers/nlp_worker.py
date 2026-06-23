@@ -27,7 +27,7 @@ async def process_nlp_job(job, job_token: str) -> dict:
     else:
         chain_input = payload.prompt
 
-    result = get_chain().invoke(chain_input)
+    result = await get_chain().ainvoke(chain_input)
     validated = ProgramOutput(**result)
     return validated.model_dump()
 
@@ -43,7 +43,7 @@ async def run_nlp_worker() -> None:
     if parsed.username:
         connection["username"] = parsed.username
     if parsed.scheme == "rediss":
-        connection["tls"] = {}
+        connection["ssl"] = True
 
     worker = Worker("nlp-jobs", process_nlp_job, {"connection": connection})
     print("[NLP Worker] Started — listening for nlp-jobs")
