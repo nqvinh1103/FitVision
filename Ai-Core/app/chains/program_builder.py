@@ -1,4 +1,3 @@
-import json
 from typing import Dict, List, Optional
 
 from langchain_core.documents import Document
@@ -33,10 +32,11 @@ Lưu ý quan trọng:
 Trả về JSON hợp lệ, không có markdown, không có ```json:
 {{
   "split_type": "Full Body | Push/Pull | Upper/Lower | Push/Pull/Legs",
+  "sessions_per_week": <integer 2-5>,
   "duration_weeks": <integer 3-6>,
   "days": [
     {{
-      "day_of_week": <1-7>,
+      "day_number": <1 đến sessions_per_week, ví dụ 1, 2, 3 cho 3 buổi/tuần>,
       "focus": "<mô tả ngắn ngày tập, ví dụ: Push - Ngực, Vai, Tay sau>",
       "query": "<chuỗi tìm kiếm tiếng Anh cho ngày này, ví dụ: push chest shoulders triceps beginner>"
     }}
@@ -66,11 +66,11 @@ Trả về JSON hợp lệ, không có markdown, không có ```json:
   "exercises": [
     {{
       "exercise_id": <integer>,
-      "day_of_week": <integer>,
+      "day_number": <integer — số thứ tự buổi trong tuần, ví dụ 1, 2, 3>,
       "sets": <integer tuần 1>,
       "reps": <integer tuần 1>,
       "order_in_session": <integer>,
-      "notes": "string hoặc null",
+      "notes": "hướng dẫn kỹ thuật cho Trainee hoặc null",
       "progressions": [
         {{"week": 1, "sets": <int>, "reps": <int>}},
         {{"week": 2, "sets": <int>, "reps": <int>}}
@@ -83,13 +83,14 @@ Trả về JSON hợp lệ, không có markdown, không có ```json:
 # ── Pydantic models cho Phase 1 output ───────────────────────────────────────
 
 class DayPlan(BaseModel):
-    day_of_week: int
+    day_number: int
     focus: str
     query: str
 
 
 class TrainingPlan(BaseModel):
     split_type: str
+    sessions_per_week: int
     duration_weeks: int
     days: List[DayPlan]
 
@@ -119,8 +120,8 @@ def _build_exercise_map(docs: List[Document]) -> Dict[int, str]:
 def _format_day_contexts(days: List[DayPlan], day_docs: Dict[int, List[Document]]) -> str:
     blocks = []
     for day in days:
-        docs = day_docs.get(day.day_of_week, [])
-        blocks.append(f"=== Buổi {day.day_of_week}: {day.focus} ===\n{_format_docs(docs)}")
+        docs = day_docs.get(day.day_number, [])
+        blocks.append(f"=== Buổi {day.day_number}: {day.focus} ===\n{_format_docs(docs)}")
     return "\n\n".join(blocks)
 
 
@@ -169,10 +170,7 @@ def _normalize_progressions(result: dict, duration_weeks: int) -> None:
         week1 = ex["progressions"][0]
         ex["sets"] = week1["sets"]
         ex["reps"] = week1["reps"]
-
-        progression_json = json.dumps({"progression": ex["progressions"]}, ensure_ascii=False)
-        existing_notes = ex.get("notes") or ""
-        ex["notes"] = f"{existing_notes}\n{progression_json}".strip() if existing_notes else progression_json
+        # progressions is stored in its own DB column — do not pollute notes field
 
 
 def _annotate_names(result: dict, exercise_map: Dict[int, str]) -> None:
@@ -249,7 +247,7 @@ def build_chain(database_url: str, gemini_api_key: str):
         exercise_map: Dict[int, str] = {}
         for day in plan.days:
             docs = retriever.invoke(day.query)
-            day_docs[day.day_of_week] = docs
+            day_docs[day.day_number] = docs
             exercise_map.update(_build_exercise_map(docs))
 
         # Phase 3: Builder
