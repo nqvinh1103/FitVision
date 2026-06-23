@@ -157,4 +157,48 @@ describe('Auth routes', () => {
       expect(authService.getMe).toHaveBeenCalledWith(1);
     });
   });
+
+  describe('PATCH /auth/me', () => {
+    it('returns 401 when Authorization header is missing', async () => {
+      const app = createApp();
+      const res = await request(app).patch('/auth/me').send({ name: 'Updated Name' });
+
+      expect(res.status).toBe(401);
+    });
+
+    it('returns 400 when body is empty', async () => {
+      const token = jwt.sign({ userId: 1, role: 'TRAINEE' }, TEST_SECRET, { expiresIn: '1h' });
+      const app = createApp();
+      const res = await request(app)
+        .patch('/auth/me')
+        .set('Authorization', `Bearer ${token}`)
+        .send({});
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Validation failed');
+    });
+
+    it('returns 200 with updated user profile when token is valid', async () => {
+      const updatedUser = {
+        ...mockUser,
+        name: 'Updated Name',
+        experienceLevel: 'BEGINNER' as const,
+      };
+      vi.mocked(authService.updateProfile).mockResolvedValue(updatedUser);
+
+      const token = jwt.sign({ userId: 1, role: 'TRAINEE' }, TEST_SECRET, { expiresIn: '1h' });
+      const app = createApp();
+      const res = await request(app)
+        .patch('/auth/me')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Updated Name', experienceLevel: 'BEGINNER' });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual(updatedUser);
+      expect(authService.updateProfile).toHaveBeenCalledWith(1, {
+        name: 'Updated Name',
+        experienceLevel: 'BEGINNER',
+      });
+    });
+  });
 });

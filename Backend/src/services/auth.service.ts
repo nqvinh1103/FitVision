@@ -1,10 +1,10 @@
 import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt, { SignOptions } from 'jsonwebtoken';
-import { User } from '@prisma/client';
+import { Prisma, User } from '@prisma/client';
 import { env } from '../config/env';
 import { prisma } from '../lib/prisma';
-import { LoginInput, RegisterInput } from '../schemas/auth.schema';
+import { LoginInput, RegisterInput, UpdateProfileInput } from '../schemas/auth.schema';
 import { AuthResponse, PublicUser, RefreshResponse } from '../types/auth.types';
 import { AppError } from '../utils/app-error';
 import { parseDurationToDate } from '../utils/duration';
@@ -132,4 +132,23 @@ export const getMe = async (userId: number): Promise<PublicUser> => {
   }
 
   return toPublicUser(user);
+};
+
+export const updateProfile = async (
+  userId: number,
+  input: UpdateProfileInput,
+): Promise<PublicUser> => {
+  try {
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: input,
+    });
+
+    return toPublicUser(user);
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+      throw new AppError(404, 'User not found');
+    }
+    throw err;
+  }
 };

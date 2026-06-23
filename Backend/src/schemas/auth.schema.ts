@@ -19,3 +19,15 @@ export const loginSchema = z.object({
 
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
+
+export const updateProfileSchema = z
+  .object({
+    name: z.string().min(1).max(255).optional(),
+    avatarUrl: z.string().url('Invalid avatar URL').nullable().optional(),
+    experienceLevel: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED']).optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: 'At least one field must be provided',
+  });
+
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;

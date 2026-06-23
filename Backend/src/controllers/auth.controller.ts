@@ -1,7 +1,7 @@
 import { Response, NextFunction } from 'express';
 import * as authService from '../services/auth.service';
 import { AuthRequest } from '../middlewares/auth.middleware';
-import { LoginInput, RegisterInput } from '../schemas/auth.schema';
+import { LoginInput, RegisterInput, UpdateProfileInput } from '../schemas/auth.schema';
 import {
   clearRefreshTokenCookie,
   REFRESH_TOKEN_COOKIE,
@@ -85,6 +85,19 @@ export const getMe = async (
 ): Promise<void> => {
   try {
     const user = await authService.getMe(req.userId!);
+    res.status(200).json(user);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const updateMe = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const user = await authService.updateProfile(req.userId!, req.body as UpdateProfileInput);
     res.status(200).json(user);
   } catch (err) {
     next(err);
