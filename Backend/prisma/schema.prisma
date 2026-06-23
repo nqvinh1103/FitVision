@@ -86,6 +86,7 @@ model RegistrationOtp {
   email        String   @unique @db.VarChar(255)
   otpHash      String   @map("otp_hash")
   passwordHash String   @map("password_hash")
+  role         Role     @default(TRAINEE)
   name         String?  @db.VarChar(255)
   attempts     Int      @default(0)
   expiresAt    DateTime @map("expires_at")

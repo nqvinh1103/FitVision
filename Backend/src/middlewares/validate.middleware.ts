@@ -6,9 +6,12 @@ export const validate =
     const result = schema.safeParse(req.body);
 
     if (!result.success) {
+      const flattened = result.error.flatten();
+
       res.status(400).json({
         error: 'Validation failed',
-        details: result.error.flatten().fieldErrors,
+        details: flattened.fieldErrors,
+        messages: flattened.formErrors,
       });
       return;
     }
