@@ -1,18 +1,22 @@
-import { mockResponse } from "@/lib/api/mock"
-import { mockCreditPackages, mockTransactions } from "@/lib/api/mock-data"
-import type { CreatePaymentPayload, PaymentLinkResponse } from "@/features/payment/types"
+import { apiClient } from "@/lib/api/client"
+import type {
+  CreatePaymentPayload,
+  CreditPackage,
+  PaymentLinkResponse,
+  Transaction,
+} from "@/features/payment/types"
 
 export function getCreditPackages() {
-  return mockResponse(mockCreditPackages)
+  return apiClient<CreditPackage[]>("/payments/packages", { auth: false })
 }
 
 export function getTransactions() {
-  return mockResponse(mockTransactions)
+  return apiClient<Transaction[]>("/payments/transactions")
 }
 
-export function createPaymentLink(_payload: CreatePaymentPayload) {
-  return mockResponse<PaymentLinkResponse>({
-    checkoutUrl: "https://example.com/checkout/mock",
-    orderCode: "MOCK-ORDER-001",
+export function createPaymentLink(payload: CreatePaymentPayload) {
+  return apiClient<PaymentLinkResponse>("/payments/checkout", {
+    method: "POST",
+    body: payload,
   })
 }
