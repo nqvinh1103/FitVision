@@ -9,6 +9,7 @@ import { swaggerSpec } from './swagger';
 import { healthRouter } from './routes/health.routes';
 import { authRouter } from './routes/auth.routes';
 import { programRouter } from './routes/program.routes';
+import { userRouter } from './routes/user.routes';
 import { errorMiddleware } from './middlewares/error.middleware';
 
 export const createApp = () => {
@@ -26,6 +27,7 @@ export const createApp = () => {
   app.use('/health', healthRouter);
   app.use('/auth', authRouter);
   app.use('/programs', programRouter);
+  app.use('/users', userRouter);
 
   app.use(errorMiddleware);
 

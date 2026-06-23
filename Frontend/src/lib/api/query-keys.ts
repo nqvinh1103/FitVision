@@ -26,6 +26,5 @@ export const queryKeys = {
   },
   admin: {
     users: ["admin", "users"] as const,
-    stats: ["admin", "stats"] as const,
   },
 } as const
