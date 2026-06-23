@@ -37,6 +37,7 @@ describe('Auth routes', () => {
         email: 'user@example.com',
         password: 'SecurePass1',
         name: 'Test User',
+        role: 'TRAINEE',
       });
 
       expect(res.status).toBe(200);
@@ -57,6 +58,7 @@ describe('Auth routes', () => {
       const res = await request(app).post('/auth/register').send({
         email: 'user@example.com',
         password: 'SecurePass1',
+        role: 'TRAINEE',
       });
 
       expect(res.status).toBe(409);
@@ -68,6 +70,64 @@ describe('Auth routes', () => {
       const res = await request(app).post('/auth/register').send({
         email: 'not-an-email',
         password: 'short',
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Validation failed');
+    });
+
+    it('returns 400 when role is not TRAINEE or TRAINER', async () => {
+      const app = createApp();
+      const res = await request(app).post('/auth/register').send({
+        email: 'user@example.com',
+        password: 'SecurePass1',
+        role: 'ADMIN',
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Validation failed');
+    });
+
+    it('accepts lowercase trainer role on register', async () => {
+      vi.mocked(authService.requestRegister).mockResolvedValue({
+        message: 'OTP sent to email',
+        expiresIn: 300,
+      });
+
+      const app = createApp();
+      const res = await request(app).post('/auth/register').send({
+        email: 'trainer@example.com',
+        password: 'SecurePass1',
+        role: 'trainer',
+      });
+
+      expect(res.status).toBe(200);
+      expect(authService.requestRegister).toHaveBeenCalledWith({
+        email: 'trainer@example.com',
+        password: 'SecurePass1',
+        role: 'TRAINER',
+      });
+    });
+
+    it('returns 400 when role is missing', async () => {
+      const app = createApp();
+      const res = await request(app).post('/auth/register').send({
+        email: 'user@example.com',
+        password: 'SecurePass1',
+        name: 'Test User',
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Validation failed');
+    });
+
+    it('returns 400 when otp is sent instead of role', async () => {
+      const app = createApp();
+      const res = await request(app).post('/auth/register').send({
+        email: 'user@example.com',
+        password: 'SecurePass1',
+        name: 'Test User',
+        otp: 'TRAINER',
       });
 
       expect(res.status).toBe(400);
@@ -120,6 +180,28 @@ describe('Auth routes', () => {
 
       expect(res.status).toBe(400);
       expect(res.body.error).toBe('Validation failed');
+    });
+
+    it('passes optional lowercase trainer role to verify service', async () => {
+      vi.mocked(authService.verifyRegister).mockResolvedValue({
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        user: { ...mockUser, role: 'TRAINER' },
+      });
+
+      const app = createApp();
+      const res = await request(app).post('/auth/register/verify').send({
+        email: 'trainer@example.com',
+        otp: '123456',
+        role: 'trainer',
+      });
+
+      expect(res.status).toBe(201);
+      expect(authService.verifyRegister).toHaveBeenCalledWith({
+        email: 'trainer@example.com',
+        otp: '123456',
+        role: 'TRAINER',
+      });
     });
   });
 

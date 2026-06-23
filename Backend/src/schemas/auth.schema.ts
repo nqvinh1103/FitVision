@@ -6,16 +6,49 @@ export const passwordSchema = z
   .regex(/[a-zA-Z]/, 'Password must contain at least one letter')
   .regex(/[0-9]/, 'Password must contain at least one number');
 
-export const registerSchema = z.object({
-  email: z.string().email('Invalid email address'),
-  password: passwordSchema,
-  name: z.string().min(1).max(255).optional(),
-});
+const REGISTER_ROLES = ['TRAINEE', 'TRAINER'] as const;
+export type RegisterRole = (typeof REGISTER_ROLES)[number];
 
-export const loginSchema = z.object({
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(1, 'Password is required'),
-});
+export const normalizeRegisterRole = (role: unknown): RegisterRole | undefined => {
+  if (typeof role !== 'string') {
+    return undefined;
+  }
+
+  const normalized = role.trim().toUpperCase();
+
+  if (normalized === 'TRAINER') {
+    return 'TRAINER';
+  }
+
+  if (normalized === 'TRAINEE') {
+    return 'TRAINEE';
+  }
+
+  return undefined;
+};
+
+export const registerRoleSchema = z.preprocess(
+  (value) => normalizeRegisterRole(value),
+  z.enum(REGISTER_ROLES, {
+    errorMap: () => ({ message: 'Role must be TRAINEE or TRAINER' }),
+  }),
+);
+
+export const registerSchema = z
+  .object({
+    email: z.string().email('Invalid email address'),
+    password: passwordSchema,
+    name: z.string().min(1).max(255).optional(),
+    role: registerRoleSchema,
+  })
+  .strict();
+
+export const loginSchema = z
+  .object({
+    email: z.string().email('Invalid email address'),
+    password: z.string().min(1, 'Password is required'),
+  })
+  .strict();
 
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
@@ -32,10 +65,13 @@ export const updateProfileSchema = z
 
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 
-export const verifyRegisterSchema = z.object({
-  email: z.string().email('Invalid email address'),
-  otp: z.string().length(6).regex(/^\d{6}$/, 'OTP must be 6 digits'),
-});
+export const verifyRegisterSchema = z
+  .object({
+    email: z.string().email('Invalid email address'),
+    otp: z.string().length(6).regex(/^\d{6}$/, 'OTP must be 6 digits'),
+    role: registerRoleSchema.optional(),
+  })
+  .strict();
 
 export const resendOtpSchema = z.object({
   email: z.string().email('Invalid email address'),
