@@ -18,7 +18,7 @@ export function useLogin() {
       setAuth(data.token, data.user)
       queryClient.setQueryData(queryKeys.auth.me, data.user)
       toast.success("Welcome back!")
-      navigate(getRoleDashboardPath(data.user.role))
+      navigate(getRoleDashboardPath(data.user.role), { replace: true })
     },
   })
 }
