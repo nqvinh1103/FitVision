@@ -48,7 +48,7 @@ class NlpJobPayload(BaseModel):
 class ExerciseSlot(BaseModel):
     exercise_id: int
     exercise_name: Optional[str] = None
-    day_of_week: int
+    day_number: int
     sets: int
     reps: int
     order_in_session: int

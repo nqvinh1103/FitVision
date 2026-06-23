@@ -25,6 +25,7 @@ enum ExperienceLevel {
 enum TransactionType {
   CREDIT_PURCHASE
   PROGRAM_PURCHASE
+  ONEONONE_UPGRADE
 }
 
 enum Difficulty {
@@ -39,10 +40,51 @@ enum ProgramStatus {
   ARCHIVED
 }
 
+enum ProgramType {
+  TEMPLATE // Marketplace — bán cho nhiều Trainee
+  ADAPTIVE // 1-on-1 — generate riêng cho 1 Trainee cụ thể
+}
+
 enum ChallengeStatus {
   PENDING
   PASSED
   FAILED
+}
+
+enum Goal {
+  STRENGTH
+  FAT_LOSS
+  ENDURANCE
+  GENERAL_FITNESS
+}
+
+enum TrainerTraineeSource {
+  INVITE             // Trainer gửi invite link cho PT client offline
+  MARKETPLACE_UPGRADE // Trainee mua program → upgrade lên 1-on-1
+}
+
+enum TrainerTraineeStatus {
+  PENDING // chờ bên kia confirm
+  ACTIVE  // đang trong quan hệ
+  ENDED   // đã kết thúc
+}
+
+enum DigestStatus {
+  PENDING_AUTO     // mới tạo, đang xử lý auto-apply MINOR
+  AUTO_APPLIED     // chỉ có MINOR, đã apply hết, Trainer chỉ cần xem
+  PENDING_TRAINER  // có MAJOR adjustments, cần Trainer duyệt
+  TRAINER_DONE     // Trainer đã approve/modify xong
+}
+
+enum NotificationType {
+  RED_GROUP_ALERT       // Trainer: "Trainee X sai form 3 lần liên tiếp"
+  WEEKLY_DIGEST_AUTO    // Trainer: "Đã tự điều chỉnh N bài cho Trainee X"
+  WEEKLY_DIGEST_PENDING // Trainer: "Cần duyệt điều chỉnh cho Trainee X"
+  PROGRAM_ADJUSTED      // Trainee: "Lịch tập tuần mới đã được cập nhật"
+  TRAINER_NOTE          // Trainee: "Trainer để lại ghi chú cho buổi tập của bạn"
+  CHALLENGE_RESULT      // Trainee: "Bạn đã vượt qua/thất bại challenge"
+  INVITE_RECEIVED       // Trainee: "Trainer X mời bạn vào chương trình"
+  UPGRADE_CONFIRMED     // Trainee: "Trainer X đã xác nhận nâng cấp 1-on-1"
 }
 
 // ─── Auth & Identity ─────────────────────────────────────────────────────────
@@ -66,6 +108,15 @@ model User {
   programs          TrainingProgram[]
   userPrograms      UserProgram[]
   challengeSessions ChallengeSession[]
+
+  // New relations
+  profile           UserProfile?
+  trainerRelations  TrainerTrainee[]      @relation("TrainerRelations")
+  traineeRelations  TrainerTrainee[]      @relation("TraineeRelations")
+  programProgress   UserProgramProgress[]
+  trainerDigests    WeeklyDigest[]        @relation("DigestTrainer")
+  traineeDigests    WeeklyDigest[]        @relation("DigestTrainee")
+  notifications     Notification[]
 
   @@map("users")
 }
@@ -108,6 +159,49 @@ model PasswordResetOtp {
   @@map("password_reset_otps")
 }
 
+// ─── User Profile ─────────────────────────────────────────────────────────────
+
+model UserProfile {
+  id     Int  @id @default(autoincrement())
+  userId Int  @unique @map("user_id")
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Trainee fields
+  goal            Goal?    @default(GENERAL_FITNESS)
+  hasPullUpBar    Boolean  @default(false) @map("has_pull_up_bar")
+  hasParallelBars Boolean  @default(false) @map("has_parallel_bars")
+  injuries        Json?    // ["lower_back", "knee"]
+
+  // Trainer fields
+  trainerBio         String? @db.Text @map("trainer_bio")
+  trainerSpeciality  String? @db.VarChar(255) @map("trainer_speciality")
+  trainer1on1Price   Int?    @map("trainer_1on1_price") // VNĐ — Trainer tự đặt giá
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("user_profiles")
+}
+
+// ─── Trainer ↔ Trainee Relationship ──────────────────────────────────────────
+
+model TrainerTrainee {
+  id         Int                  @id @default(autoincrement())
+  trainerId  Int                  @map("trainer_id")
+  traineeId  Int                  @map("trainee_id")
+  trainer    User                 @relation("TrainerRelations", fields: [trainerId], references: [id], onDelete: Cascade)
+  trainee    User                 @relation("TraineeRelations", fields: [traineeId], references: [id], onDelete: Cascade)
+  source     TrainerTraineeSource
+  status     TrainerTraineeStatus @default(PENDING)
+  inviteToken String?             @unique @map("invite_token") @db.VarChar(255)
+  invitedAt  DateTime             @default(now()) @map("invited_at")
+  activatedAt DateTime?           @map("activated_at")
+
+  @@unique([trainerId, traineeId])
+  @@index([trainerId])
+  @@index([traineeId])
+  @@map("trainer_trainees")
+}
+
 // ─── Payments ────────────────────────────────────────────────────────────────
 
 model Transaction {
@@ -145,8 +239,6 @@ model TrainingSession {
   trainerNotes String?          @map("trainer_notes")
   createdAt    DateTime         @default(now()) @map("created_at")
 
-  challengeSessions ChallengeSession[]
-
   @@index([userId])
   @@index([score])
   @@index([status])
@@ -167,6 +259,8 @@ model Exercise {
   creator         User?       @relation(fields: [creatorId], references: [id], onDelete: SetNull)
   createdAt       DateTime    @default(now()) @map("created_at")
 
+  // embedding vector(768) — managed via manual migration, not Prisma
+
   sessions         TrainingSession[]
   programExercises ProgramExercise[]
   challenges       Challenge[]
@@ -179,25 +273,32 @@ model Exercise {
 // ─── Marketplace & RAG ───────────────────────────────────────────────────────
 
 model TrainingProgram {
-  id             Int           @id @default(autoincrement())
-  trainerId      Int           @map("trainer_id")
-  trainer        User          @relation(fields: [trainerId], references: [id], onDelete: Cascade)
-  title          String        @db.VarChar(255)
-  description    String?
-  thumbnailUrl   String?       @map("thumbnail_url")
-  price          Int           @default(0)
-  durationWeeks  Int?          @map("duration_weeks")
-  isAiGenerated  Boolean       @default(false) @map("is_ai_generated")
-  status         ProgramStatus @default(DRAFT)
-  createdAt      DateTime      @default(now()) @map("created_at")
-  updatedAt      DateTime      @updatedAt @map("updated_at")
+  id               Int           @id @default(autoincrement())
+  trainerId        Int?          @map("trainer_id") // nullable — NULL khi isSystemTemplate
+  trainer          User?         @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  title            String        @db.VarChar(255)
+  description      String?
+  thumbnailUrl     String?       @map("thumbnail_url")
+  price            Int           @default(0)
+  durationWeeks    Int?          @map("duration_weeks")
+  sessionsPerWeek  Int?          @map("sessions_per_week")
+  isAiGenerated    Boolean       @default(false) @map("is_ai_generated")
+  isSystemTemplate Boolean       @default(false) @map("is_system_template")
+  programType      ProgramType   @default(TEMPLATE) @map("program_type")
+  status           ProgramStatus @default(DRAFT)
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
 
   programExercises ProgramExercise[]
   userPrograms     UserProgram[]
   sessions         TrainingSession[]
+  progress         UserProgramProgress[]
+  digests          WeeklyDigest[]
 
   @@index([trainerId])
   @@index([status])
+  @@index([programType])
+  @@index([isSystemTemplate])
   @@map("training_programs")
 }
 
@@ -207,12 +308,13 @@ model ProgramExercise {
   program         TrainingProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
   exerciseId      Int             @map("exercise_id")
   exercise        Exercise        @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
-  dayNumber       Int             @map("day_number")
+  dayNumber       Int             @map("day_number") // sequential: 1,2,3... trong chu kỳ tuần
   orderInDay      Int             @map("order_in_day")
   sets            Int?
   reps            Int?
   durationSeconds Int?            @map("duration_seconds")
-  notes           String?
+  progressions    Json?           // [{"week":1,"sets":3,"reps":8}, {"week":2,"sets":3,"reps":10}]
+  notes           String?         @db.Text // ghi chú hướng dẫn của Trainer cho Trainee
 
   @@unique([programId, dayNumber, orderInDay])
   @@index([programId])
@@ -235,20 +337,80 @@ model UserProgram {
   @@map("user_programs")
 }
 
+// ─── Program Progress ─────────────────────────────────────────────────────────
+
+model UserProgramProgress {
+  id            Int             @id @default(autoincrement())
+  userId        Int             @map("user_id")
+  programId     Int             @map("program_id")
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  program       TrainingProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  currentWeek   Int      @default(1) @map("current_week")
+  currentDay    Int      @default(1) @map("current_day") // day_number trong chu kỳ tuần
+  startedAt     DateTime @default(now()) @map("started_at")
+  lastSessionAt DateTime? @map("last_session_at")
+  weekStartedAt DateTime @default(now()) @map("week_started_at") // để tính 7 ngày calendar-based
+
+  @@unique([userId, programId])
+  @@index([userId])
+  @@index([programId])
+  @@map("user_program_progress")
+}
+
+// ─── Adaptive Program — Weekly Digest ────────────────────────────────────────
+
+model WeeklyDigest {
+  id          Int             @id @default(autoincrement())
+  trainerId   Int             @map("trainer_id")
+  traineeId   Int             @map("trainee_id")
+  programId   Int             @map("program_id")
+  trainer     User            @relation("DigestTrainer", fields: [trainerId], references: [id])
+  trainee     User            @relation("DigestTrainee", fields: [traineeId], references: [id])
+  program     TrainingProgram @relation(fields: [programId], references: [id])
+
+  weekNumber        Int          @map("week_number")
+  avgFormScores     Json         @map("avg_form_scores") // {"exercise_id": avg_score}
+  aiAnalysis        String       @db.Text @map("ai_analysis") // tóm tắt cho Trainer đọc
+  adjustments       Json         // [{exercise_id, type, field, old_value, new_value, reason, applied}]
+  status            DigestStatus @default(PENDING_AUTO)
+  trainerReviewedAt DateTime?    @map("trainer_reviewed_at")
+  createdAt         DateTime     @default(now()) @map("created_at")
+
+  @@index([trainerId, status])
+  @@index([traineeId, programId])
+  @@map("weekly_digests")
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+
+model Notification {
+  id        Int              @id @default(autoincrement())
+  userId    Int              @map("user_id")
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  payload   Json
+  readAt    DateTime?        @map("read_at")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
 // ─── Gamification ────────────────────────────────────────────────────────────
 
 model Challenge {
-  id             Int       @id @default(autoincrement())
-  title          String    @db.VarChar(255)
-  description    String?
-  exerciseId     Int       @map("exercise_id")
-  exercise       Exercise  @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
-  targetReps     Int?      @map("target_reps")
-  targetScore    Float?    @map("target_score")
-  rewardCredits  Int       @map("reward_credits")
-  startAt        DateTime  @map("start_at")
-  endAt          DateTime  @map("end_at")
-  createdAt      DateTime  @default(now()) @map("created_at")
+  id            Int       @id @default(autoincrement())
+  title         String    @db.VarChar(255)
+  description   String?
+  exerciseId    Int       @map("exercise_id")
+  exercise      Exercise  @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+  targetReps    Int?      @map("target_reps")
+  targetScore   Float?    @map("target_score")
+  rewardCredits Int       @map("reward_credits")
+  startAt       DateTime  @map("start_at")
+  endAt         DateTime  @map("end_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
 
   sessions ChallengeSession[]
 
@@ -258,22 +420,19 @@ model Challenge {
 }
 
 model ChallengeSession {
-  id                Int              @id @default(autoincrement())
-  userId            Int              @map("user_id")
-  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  challengeId       Int              @map("challenge_id")
-  challenge         Challenge        @relation(fields: [challengeId], references: [id], onDelete: Cascade)
-  trainingSessionId Int?             @map("training_session_id")
-  trainingSession   TrainingSession? @relation(fields: [trainingSessionId], references: [id], onDelete: SetNull)
-  achievedReps      Int?             @map("achieved_reps")
-  achievedScore     Float?           @map("achieved_score")
-  status            ChallengeStatus  @default(PENDING)
-  completedAt       DateTime?        @map("completed_at")
-  createdAt         DateTime         @default(now()) @map("created_at")
+  id           Int             @id @default(autoincrement())
+  userId       Int             @map("user_id")
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challengeId  Int             @map("challenge_id")
+  challenge    Challenge       @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  achievedReps Int?            @map("achieved_reps")
+  achievedScore Float?         @map("achieved_score")
+  status       ChallengeStatus @default(PENDING)
+  completedAt  DateTime?       @map("completed_at")
+  createdAt    DateTime        @default(now()) @map("created_at")
 
   @@unique([userId, challengeId])
   @@index([userId])
   @@index([challengeId])
-  @@index([trainingSessionId])
   @@map("challenge_sessions")
 }
