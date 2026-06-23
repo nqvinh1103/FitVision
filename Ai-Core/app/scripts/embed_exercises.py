@@ -18,7 +18,7 @@ def _fetch_unembedded(database_url: str) -> List[Tuple]:
     try:
         cur = conn.cursor()
         cur.execute(
-            "SELECT id, name, description, muscles_targeted FROM exercises WHERE embedding IS NULL"
+            "SELECT id, name, description, muscles_targeted FROM exercises"
         )
         return cur.fetchall()
     finally:
@@ -27,7 +27,7 @@ def _fetch_unembedded(database_url: str) -> List[Tuple]:
 
 def _build_store(database_url: str, gemini_api_key: str) -> PGVector:
     embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/text-embedding-004",
+        model="gemini-embedding-2",
         google_api_key=gemini_api_key,
     )
     return PGVector(
@@ -52,7 +52,7 @@ def main() -> None:
         docs = [
             Document(
                 page_content=f"{name}. {description or ''}. Muscles: {muscle_group or ''}",
-                metadata={"exercise_id": row_id},
+                metadata={"exercise_id": row_id, "exercise_name": name},
             )
             for row_id, name, description, muscle_group in batch
         ]

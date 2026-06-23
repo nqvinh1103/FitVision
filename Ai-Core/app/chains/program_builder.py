@@ -1,9 +1,9 @@
-from typing import List
+from typing import Dict, List
 
 from langchain_core.documents import Document
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import PromptTemplate
-from langchain_core.runnables import RunnableParallel, RunnablePassthrough
+from langchain_core.runnables import RunnableLambda
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_postgres import PGVector
 
@@ -45,6 +45,18 @@ def _format_docs(docs: List[Document]) -> str:
     return "\n".join(lines)
 
 
+def _build_exercise_map(docs: List[Document]) -> Dict[int, str]:
+    result = {}
+    for doc in docs:
+        ex_id = doc.metadata.get("exercise_id")
+        if ex_id is None:
+            continue
+        # prefer metadata name (set by embed_exercises.py); fall back to page_content prefix
+        name = doc.metadata.get("exercise_name") or doc.page_content.split(".")[0].strip()
+        result[ex_id] = name
+    return result
+
+
 def _langchain_db_url(url: str) -> str:
     if url.startswith("postgresql://"):
         return url.replace("postgresql://", "postgresql+psycopg://", 1)
@@ -53,7 +65,7 @@ def _langchain_db_url(url: str) -> str:
 
 def build_chain(database_url: str, gemini_api_key: str):
     embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/text-embedding-004",
+        model="gemini-embedding-2",
         google_api_key=gemini_api_key,
     )
 
@@ -65,7 +77,7 @@ def build_chain(database_url: str, gemini_api_key: str):
     retriever = store.as_retriever(search_kwargs={"k": 8})
 
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         temperature=0.3,
         google_api_key=gemini_api_key,
     )
@@ -75,14 +87,28 @@ def build_chain(database_url: str, gemini_api_key: str):
         template=_PROMPT_TEMPLATE,
     )
 
-    chain = (
-        RunnableParallel(
-            exercises_context=retriever | _format_docs,
-            prompt=RunnablePassthrough(),
-        )
-        | prompt
-        | llm
-        | JsonOutputParser()
-    )
+    llm_chain = prompt | llm | JsonOutputParser()
 
-    return chain
+    def _invoke(user_prompt: str) -> dict:
+        docs = retriever.invoke(user_prompt)
+        exercise_map = _build_exercise_map(docs)
+
+        result = llm_chain.invoke({
+            "prompt": user_prompt,
+            "exercises_context": _format_docs(docs),
+        })
+
+        invalid_ids = [
+            e["exercise_id"]
+            for e in result.get("exercises", [])
+            if e["exercise_id"] not in exercise_map
+        ]
+        if invalid_ids:
+            raise ValueError(f"LLM hallucinated exercise IDs: {invalid_ids}")
+
+        for exercise in result["exercises"]:
+            exercise["exercise_name"] = exercise_map[exercise["exercise_id"]]
+
+        return result
+
+    return RunnableLambda(_invoke)
