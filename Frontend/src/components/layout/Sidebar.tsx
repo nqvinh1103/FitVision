@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
+import { useLogout } from "@/features/auth/hooks/useLogout"
 import { useAuthStore } from "@/stores/auth.store"
 import { useUiStore } from "@/stores/ui.store"
 import type { UserRole } from "@/types/user.types"
@@ -57,7 +58,7 @@ function getNavItems(role: UserRole): NavItem[] {
 export function Sidebar() {
   const location = useLocation()
   const user = useAuthStore((s) => s.user)
-  const logout = useAuthStore((s) => s.logout)
+  const logout = useLogout()
   const sidebarOpen = useUiStore((s) => s.sidebarOpen)
   const toggleSidebar = useUiStore((s) => s.toggleSidebar)
 

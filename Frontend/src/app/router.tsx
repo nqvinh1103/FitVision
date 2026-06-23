@@ -66,7 +66,7 @@ export const router = createBrowserRouter([
   //   ),
   // },
   {
-    // element: <ProtectedRoute />,
+    element: <ProtectedRoute />,
     children: [
       {
         element: <AppShell />,
