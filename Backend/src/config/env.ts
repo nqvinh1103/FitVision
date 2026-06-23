@@ -13,6 +13,16 @@ const envSchema = z.object({
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
   HMAC_SECRET: z.string().min(16),
   FRONTEND_URL: z.string().url().default('http://localhost:5173'),
+  EMAIL_USER: z.string().email(),
+  EMAIL_APP_PASSWORD: z.string().min(1),
+  SMTP_HOST: z.string().min(1),
+  SMTP_PORT: z.string().default('587').transform(Number),
+  SMTP_SECURE: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  OTP_EXPIRES_IN: z.string().default('5m'),
+  OTP_RESEND_COOLDOWN_SECONDS: z.string().default('60').transform(Number),
 });
 
 const parsed = envSchema.safeParse(process.env);
