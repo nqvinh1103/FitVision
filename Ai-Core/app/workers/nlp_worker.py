@@ -20,11 +20,14 @@ def get_chain():
 async def process_nlp_job(job, job_token: str) -> dict:
     payload = NlpJobPayload(**job.data)
 
-    combined_prompt = payload.prompt
-    if payload.context:
-        combined_prompt = f"{payload.prompt}\n\nThêm context: {payload.context}"
+    if payload.user_profile is not None:
+        chain_input = {"prompt": payload.prompt, "user_profile": payload.user_profile}
+    elif payload.context:
+        chain_input = f"{payload.prompt}\n\nThêm context: {payload.context}"
+    else:
+        chain_input = payload.prompt
 
-    result = get_chain().invoke(combined_prompt)
+    result = get_chain().invoke(chain_input)
     validated = ProgramOutput(**result)
     return validated.model_dump()
 

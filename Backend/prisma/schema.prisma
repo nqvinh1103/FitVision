@@ -209,7 +209,8 @@ model UserProgram {
 
 // ─── Gamification ────────────────────────────────────────────────────────────
 
-model Challenge {
+model 
+{
   id             Int       @id @default(autoincrement())
   title          String    @db.VarChar(255)
   description    String?
