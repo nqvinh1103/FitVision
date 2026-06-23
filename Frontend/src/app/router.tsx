@@ -13,6 +13,10 @@ import {
   MarketplacePage,
   PaymentPage,
   RegisterPage,
+  VerifyRegisterPage,
+  ForgotPasswordPage,
+  ResetPasswordPage,
+  ChangePasswordPage,
   TrainerAlertsPage,
   TrainerDashboardPage,
   TrainerProgramsPage,
@@ -52,6 +56,30 @@ export const router = createBrowserRouter([
         element: (
           <LazyPage>
             <RegisterPage />
+          </LazyPage>
+        ),
+      },
+      {
+        path: "/register/verify",
+        element: (
+          <LazyPage>
+            <VerifyRegisterPage />
+          </LazyPage>
+        ),
+      },
+      {
+        path: "/forgot-password",
+        element: (
+          <LazyPage>
+            <ForgotPasswordPage />
+          </LazyPage>
+        ),
+      },
+      {
+        path: "/forgot-password/reset",
+        element: (
+          <LazyPage>
+            <ResetPasswordPage />
           </LazyPage>
         ),
       },
@@ -108,6 +136,14 @@ export const router = createBrowserRouter([
             element: (
               <LazyPage>
                 <MarketplacePage />
+              </LazyPage>
+            ),
+          },
+          {
+            path: "/settings/change-password",
+            element: (
+              <LazyPage>
+                <ChangePasswordPage />
               </LazyPage>
             ),
           },
