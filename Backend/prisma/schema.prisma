@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -153,7 +154,6 @@ model TrainingSession {
   @@map("training_sessions")
 }
 
-// Requires pgvector extension: CREATE EXTENSION IF NOT EXISTS vector;
 model Exercise {
   id              Int         @id @default(autoincrement())
   name            String      @db.VarChar(255)
@@ -164,7 +164,6 @@ model Exercise {
   musclesTargeted Json?       @map("muscles_targeted")
   creatorId       Int?        @map("creator_id")
   creator         User?       @relation(fields: [creatorId], references: [id], onDelete: SetNull)
-  embedding       Unsupported("vector(1536)")?
   createdAt       DateTime    @default(now()) @map("created_at")
 
   sessions         TrainingSession[]
