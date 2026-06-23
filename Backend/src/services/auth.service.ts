@@ -262,6 +262,21 @@ export const login = async (input: LoginInput): Promise<AuthResponse & { refresh
   });
 
   if (!user) {
+    const pending = await prisma.registrationOtp.findUnique({
+      where: { email: input.email },
+    });
+
+    if (pending) {
+      const isPendingPasswordValid = await bcrypt.compare(input.password, pending.passwordHash);
+
+      if (isPendingPasswordValid) {
+        throw new AppError(
+          403,
+          'Email chưa được xác thực. Vui lòng nhập mã OTP đã gửi về email của bạn.',
+        );
+      }
+    }
+
     throw new AppError(401, 'Invalid email or password');
   }
 

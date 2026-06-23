@@ -6,7 +6,7 @@ import { Link } from "react-router-dom"
 
 import { FieldGroup } from "@/components/ui/field"
 
-import { FormRadioField, FormTextField } from "@/components/common/form-fields"
+import { FormPasswordField, FormRadioField, FormTextField } from "@/components/common/form-fields"
 
 import { AuthFormShell } from "@/features/auth/components/AuthFormShell"
 
@@ -132,36 +132,20 @@ export function RegisterForm() {
 
             />
 
-            <FormTextField
-
+            <FormPasswordField
               control={form.control}
-
               name="password"
-
               label="Password"
-
-              type="password"
-
               autoComplete="new-password"
-
               variant="underline"
-
             />
 
-            <FormTextField
-
+            <FormPasswordField
               control={form.control}
-
               name="confirmPassword"
-
               label="Confirm password"
-
-              type="password"
-
               autoComplete="new-password"
-
               variant="underline"
-
             />
 
             <FormRadioField
