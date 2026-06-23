@@ -3,9 +3,12 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
+import swaggerUi from 'swagger-ui-express';
 import { env } from './config/env';
+import { swaggerSpec } from './swagger';
 import { healthRouter } from './routes/health.routes';
 import { authRouter } from './routes/auth.routes';
+import { programRouter } from './routes/program.routes';
 import { errorMiddleware } from './middlewares/error.middleware';
 
 export const createApp = () => {
@@ -17,8 +20,12 @@ export const createApp = () => {
   app.use(express.json());
   app.use(cookieParser());
 
+  app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true }));
+  app.get('/docs/json', (_req, res) => res.json(swaggerSpec));
+
   app.use('/health', healthRouter);
   app.use('/auth', authRouter);
+  app.use('/programs', programRouter);
 
   app.use(errorMiddleware);
 

@@ -7,6 +7,15 @@ export interface AuthRequest extends Request {
   userRole?: string;
 }
 
+export const requireRole = (...roles: string[]) =>
+  (req: AuthRequest, res: Response, next: NextFunction): void => {
+    if (!req.userRole || !roles.includes(req.userRole)) {
+      res.status(403).json({ error: 'Bạn không có quyền thực hiện thao tác này' });
+      return;
+    }
+    next();
+  };
+
 export const authMiddleware = (
   req: AuthRequest,
   res: Response,
