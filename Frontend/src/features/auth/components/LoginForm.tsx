@@ -2,7 +2,7 @@ import { FormProvider, useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Link } from "react-router-dom"
 import { FieldGroup } from "@/components/ui/field"
-import { FormTextField } from "@/components/common/form-fields"
+import { FormPasswordField, FormTextField } from "@/components/common/form-fields"
 import { AuthFormShell } from "@/features/auth/components/AuthFormShell"
 import { loginSchema, type LoginFormValues } from "@/features/auth/schemas/auth.schema"
 import { useLogin } from "@/features/auth/hooks/useLogin"
@@ -44,11 +44,10 @@ export function LoginForm() {
               variant="underline"
             />
             <div className="space-y-2">
-              <FormTextField
+              <FormPasswordField
                 control={form.control}
                 name="password"
                 label="Password"
-                type="password"
                 autoComplete="current-password"
                 variant="underline"
               />
@@ -75,4 +74,4 @@ export function LoginForm() {
     </AuthFormShell>
   )
 }
-
+

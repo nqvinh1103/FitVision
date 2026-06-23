@@ -194,6 +194,12 @@ authRouter.post('/register/resend-otp', validate(resendOtpSchema), authControlle
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Email đã đăng ký nhưng chưa xác thực OTP
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 authRouter.post('/login', validate(loginSchema), authController.login);
 

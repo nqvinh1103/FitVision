@@ -388,6 +388,27 @@ describe('Auth routes', () => {
       expect(res.status).toBe(401);
       expect(res.body).toEqual({ error: 'Invalid email or password' });
     });
+
+    it('returns 403 when email is registered but not verified', async () => {
+      const { AppError } = await import('../utils/app-error');
+      vi.mocked(authService.login).mockRejectedValue(
+        new AppError(
+          403,
+          'Email chưa được xác thực. Vui lòng nhập mã OTP đã gửi về email của bạn.',
+        ),
+      );
+
+      const app = createApp();
+      const res = await request(app).post('/auth/login').send({
+        email: 'user@example.com',
+        password: 'SecurePass1',
+      });
+
+      expect(res.status).toBe(403);
+      expect(res.body).toEqual({
+        error: 'Email chưa được xác thực. Vui lòng nhập mã OTP đã gửi về email của bạn.',
+      });
+    });
   });
 
   describe('POST /auth/refresh', () => {

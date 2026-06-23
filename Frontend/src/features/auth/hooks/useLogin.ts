@@ -6,6 +6,7 @@ import type { LoginFormValues } from "@/features/auth/schemas/auth.schema"
 import { queryKeys } from "@/lib/api/query-keys"
 import { useAuthStore } from "@/stores/auth.store"
 import { getRoleDashboardPath } from "@/lib/navigation"
+import { ApiError } from "@/types/api.types"
 
 export function useLogin() {
   const setAuth = useAuthStore((s) => s.setAuth)
@@ -19,6 +20,15 @@ export function useLogin() {
       queryClient.setQueryData(queryKeys.auth.me, data.user)
       toast.success("Welcome back!")
       navigate(getRoleDashboardPath(data.user.role), { replace: true })
+    },
+    onError: (error, variables) => {
+      if (error instanceof ApiError && error.status === 403) {
+        toast.error(error.message)
+        navigate(`/register/verify?email=${encodeURIComponent(variables.email)}`)
+        return
+      }
+
+      toast.error(error instanceof Error ? error.message : "Login failed")
     },
   })
 }
