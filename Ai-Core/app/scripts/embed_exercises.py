@@ -18,7 +18,7 @@ def _fetch_unembedded(database_url: str) -> List[Tuple]:
     try:
         cur = conn.cursor()
         cur.execute(
-            "SELECT id, name, description, muscle_group FROM exercises WHERE embedding IS NULL"
+            "SELECT id, name, description, muscles_targeted FROM exercises WHERE embedding IS NULL"
         )
         return cur.fetchall()
     finally:
@@ -51,7 +51,7 @@ def main() -> None:
         batch = rows[i : i + BATCH_SIZE]
         docs = [
             Document(
-                page_content=f"{name}. {description}. Muscle group: {muscle_group}",
+                page_content=f"{name}. {description or ''}. Muscles: {muscle_group or ''}",
                 metadata={"exercise_id": row_id},
             )
             for row_id, name, description, muscle_group in batch
