@@ -18,3 +18,8 @@ export interface AuthResponse {
 export interface RefreshResponse {
   accessToken: string;
 }
+
+export interface RegisterOtpResponse {
+  message: string;
+  expiresIn: number;
+}

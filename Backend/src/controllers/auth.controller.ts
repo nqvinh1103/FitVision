@@ -1,7 +1,7 @@
 import { Response, NextFunction } from 'express';
 import * as authService from '../services/auth.service';
 import { AuthRequest } from '../middlewares/auth.middleware';
-import { LoginInput, RegisterInput, UpdateProfileInput } from '../schemas/auth.schema';
+import { LoginInput, RegisterInput, UpdateProfileInput, VerifyRegisterInput } from '../schemas/auth.schema';
 import {
   clearRefreshTokenCookie,
   REFRESH_TOKEN_COOKIE,
@@ -14,12 +14,39 @@ export const register = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
-    const result = await authService.register(req.body as RegisterInput);
+    const result = await authService.requestRegister(req.body as RegisterInput);
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const verifyRegister = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const result = await authService.verifyRegister(req.body as VerifyRegisterInput);
     setRefreshTokenCookie(res, result.refreshToken);
     res.status(201).json({
       accessToken: result.accessToken,
       user: result.user,
     });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const resendRegisterOtp = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const { email } = req.body as { email: string };
+    const result = await authService.resendRegisterOtp(email);
+    res.status(200).json(result);
   } catch (err) {
     next(err);
   }

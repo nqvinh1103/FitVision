@@ -6,6 +6,7 @@ import * as authService from '../services/auth.service';
 import { REFRESH_TOKEN_COOKIE } from '../utils/cookie';
 
 vi.mock('../services/auth.service');
+vi.mock('../services/email.service');
 
 const TEST_SECRET = process.env.JWT_SECRET!;
 
@@ -25,11 +26,10 @@ describe('Auth routes', () => {
   });
 
   describe('POST /auth/register', () => {
-    it('returns 201 with accessToken and sets refresh cookie', async () => {
-      vi.mocked(authService.register).mockResolvedValue({
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-        user: mockUser,
+    it('returns 200 with OTP sent message', async () => {
+      vi.mocked(authService.requestRegister).mockResolvedValue({
+        message: 'OTP sent to email',
+        expiresIn: 300,
       });
 
       const app = createApp();
@@ -39,17 +39,19 @@ describe('Auth routes', () => {
         name: 'Test User',
       });
 
-      expect(res.status).toBe(201);
+      expect(res.status).toBe(200);
       expect(res.body).toEqual({
-        accessToken: 'access-token',
-        user: mockUser,
+        message: 'OTP sent to email',
+        expiresIn: 300,
       });
-      expect(res.headers['set-cookie']?.[0]).toContain(`${REFRESH_TOKEN_COOKIE}=refresh-token`);
+      expect(res.headers['set-cookie']).toBeUndefined();
     });
 
     it('returns 409 when email already exists', async () => {
       const { AppError } = await import('../utils/app-error');
-      vi.mocked(authService.register).mockRejectedValue(new AppError(409, 'Email already exists'));
+      vi.mocked(authService.requestRegister).mockRejectedValue(
+        new AppError(409, 'Email already exists'),
+      );
 
       const app = createApp();
       const res = await request(app).post('/auth/register').send({
@@ -70,6 +72,75 @@ describe('Auth routes', () => {
 
       expect(res.status).toBe(400);
       expect(res.body.error).toBe('Validation failed');
+    });
+  });
+
+  describe('POST /auth/register/verify', () => {
+    it('returns 201 with accessToken and sets refresh cookie', async () => {
+      vi.mocked(authService.verifyRegister).mockResolvedValue({
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        user: mockUser,
+      });
+
+      const app = createApp();
+      const res = await request(app).post('/auth/register/verify').send({
+        email: 'user@example.com',
+        otp: '123456',
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body).toEqual({
+        accessToken: 'access-token',
+        user: mockUser,
+      });
+      expect(res.headers['set-cookie']?.[0]).toContain(`${REFRESH_TOKEN_COOKIE}=refresh-token`);
+    });
+
+    it('returns 401 for invalid OTP', async () => {
+      const { AppError } = await import('../utils/app-error');
+      vi.mocked(authService.verifyRegister).mockRejectedValue(new AppError(401, 'Invalid OTP'));
+
+      const app = createApp();
+      const res = await request(app).post('/auth/register/verify').send({
+        email: 'user@example.com',
+        otp: '000000',
+      });
+
+      expect(res.status).toBe(401);
+      expect(res.body).toEqual({ error: 'Invalid OTP' });
+    });
+
+    it('returns 400 for invalid OTP format', async () => {
+      const app = createApp();
+      const res = await request(app).post('/auth/register/verify').send({
+        email: 'user@example.com',
+        otp: 'abc',
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Validation failed');
+    });
+  });
+
+  describe('POST /auth/register/resend-otp', () => {
+    it('returns 200 when OTP is resent', async () => {
+      vi.mocked(authService.resendRegisterOtp).mockResolvedValue({
+        message: 'OTP sent to email',
+        expiresIn: 300,
+      });
+
+      const app = createApp();
+      const res = await request(app).post('/auth/register/resend-otp').send({
+        email: 'user@example.com',
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        message: 'OTP sent to email',
+        expiresIn: 300,
+      });
+      expect(authService.resendRegisterOtp).toHaveBeenCalledWith('user@example.com');
     });
   });
 

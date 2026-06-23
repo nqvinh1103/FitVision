@@ -31,3 +31,15 @@ export const updateProfileSchema = z
   });
 
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
+
+export const verifyRegisterSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  otp: z.string().length(6).regex(/^\d{6}$/, 'OTP must be 6 digits'),
+});
+
+export const resendOtpSchema = z.object({
+  email: z.string().email('Invalid email address'),
+});
+
+export type VerifyRegisterInput = z.infer<typeof verifyRegisterSchema>;
+export type ResendOtpInput = z.infer<typeof resendOtpSchema>;
